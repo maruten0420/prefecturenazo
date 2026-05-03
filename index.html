@@ -197,8 +197,13 @@
             answerInput.value = "";
             message.innerText = "";
             
+            // バッテリーパズルのリスナーを無効化
+            batteryPuzzleActive = false;
+
             if (id === 1) {
                 renderPrefecturePuzzle(display);
+            } else if (id === 2) {
+                renderBatteryPuzzle(display);
             } else {
                 display.innerHTML = `<div class="flex flex-col items-center justify-center h-full"><h2 class="text-2xl font-bold">謎 ${id}</h2><p class="mt-4 text-slate-400">（この謎はまだロックされています）</p></div>`;
             }
@@ -220,6 +225,171 @@
                     message.className = "text-center mt-2 font-bold h-6 text-red-400";
                 }
             }
+            
+            if (currentNazo === 2) {
+                if (val === "がめ") {
+                    message.innerText = "CORRECT!";
+                    message.className = "text-center mt-2 font-bold h-6 text-green-400";
+                    document.getElementById('nazo-container').classList.add('success-flash');
+                    setTimeout(() => document.getElementById('nazo-container').classList.remove('success-flash'), 500);
+                } else {
+                    message.innerText = "WRONG...";
+                    message.className = "text-center mt-2 font-bold h-6 text-red-400";
+                }
+            }
+        }
+
+        // --- バッテリーパズル用 ---
+        let batteryPuzzleActive = false;
+
+        // シード付き乱数生成器 (同じ%では同じシャッフル結果を保証)
+        function createSeededRandom(seed) {
+            let s = (seed ^ 0xDEAD) >>> 0;
+            return () => {
+                s = Math.imul(s ^ (s >>> 15), 1 | s);
+                s ^= s + Math.imul(s ^ (s >>> 7), 61 | s);
+                return ((s ^ (s >>> 14)) >>> 0) / 0x100000000;
+            };
+        }
+
+        function shuffleWithSeed(arr, seed) {
+            const a = [...arr];
+            const rng = createSeededRandom(seed);
+            for (let i = a.length - 1; i > 0; i--) {
+                const j = Math.floor(rng() * (i + 1));
+                [a[i], a[j]] = [a[j], a[i]];
+            }
+            return a;
+        }
+
+        async function renderBatteryPuzzle(container) {
+            // おねがめのいんとまく の10文字
+            const hiraganaAll = ['お','ね','が','め','の','い','ん','と','ま','く'];
+
+            container.innerHTML = '<p class="text-slate-400 text-center py-12">バッテリー情報を読み込み中...</p>';
+
+            let battery = null;
+            try {
+                battery = await navigator.getBattery();
+            } catch(e) {
+                container.innerHTML = '<p class="text-slate-400 text-center py-12">このブラウザはBattery APIに対応していません</p>';
+                return;
+            }
+
+            batteryPuzzleActive = true;
+            let lastRenderedLevel = null;
+
+            function computeAndRender() {
+                if (!batteryPuzzleActive) return;
+
+                const level = Math.round(battery.level * 100);
+
+                // 同じ%ならシャッフルしない(表示は再描画しない)
+                if (level === lastRenderedLevel) return;
+                lastRenderedLevel = level;
+
+                // --- ぞろ目・100%判定 ---
+                // ぞろ目: 11,22,33,...,99 (十の位と一の位が同じ、0除く)
+                // 100% も特殊ケース
+                const isZoromi = level > 0 && level < 100 && level % 11 === 0;
+                const isSpecial = (level === 100) || isZoromi;
+
+                // 有効値(特殊なら-1)
+                const effective = isSpecial ? level - 1 : level;
+
+                // 十の位・一の位 (2桁扱い、100%-1=99 → 十:9 一:9)
+                const tens = Math.floor(effective / 10) % 10;
+                const ones = effective % 10;
+
+                // digit→hiragana マップ (0〜9)
+                const digitMap = new Array(10).fill(null);
+                digitMap[tens] = 'が';
+                if (tens !== ones) {
+                    digitMap[ones] = 'め';
+                }
+
+                // 残りの文字をシード付きシャッフルで空きスロットへ
+                const usedChars = new Set(tens === ones ? ['が'] : ['が', 'め']);
+                const remaining = hiraganaAll.filter(h => !usedChars.has(h));
+                const freePos = [];
+                for (let i = 0; i < 10; i++) {
+                    if (digitMap[i] === null) freePos.push(i);
+                }
+                const shuffled = shuffleWithSeed(remaining, level);
+                for (let i = 0; i < freePos.length; i++) {
+                    digitMap[freePos[i]] = shuffled[i];
+                }
+                // edge case: tens===ones (0%や100%-1=99)のとき め も適切に表示するためdummy表記
+                if (tens === ones) {
+                    digitMap[tens] = 'が'; // が優先、めは別スロット(shuffled内)
+                }
+
+                // クルー文字の桁位置を検索
+                const pos = (c) => digitMap.indexOf(c);
+                const d_to = pos('と');  // A=と
+                const d_ma = pos('ま');  // B=ま
+                const d_o  = pos('お');  // C=お
+                const d_ne = pos('ね');  // D=ね
+
+                // --- HTML構築 ---
+                const arrow = '<span style="color:#4ade80;font-size:1.25rem;font-weight:bold;margin:0 6px;">→</span>';
+
+                function numBox(n) {
+                    return `<span style="display:inline-flex;align-items:center;justify-content:center;width:2rem;height:2rem;background:#334155;border:1px solid #64748b;border-radius:4px;font-size:0.9rem;font-weight:bold;color:#93c5fd;">${n}</span>`;
+                }
+
+                const addProcess = isSpecial
+                    ? '<span style="color:#fde047;font-weight:bold;"> −１</span>'
+                    : '';
+
+                // グリッド (表示順: 1 2 3 4 5 6 7 8 9 0)
+                const displayOrder = [1,2,3,4,5,6,7,8,9,0];
+
+                const row1HTML = displayOrder.map(d =>
+                    `<div style="width:2.25rem;height:2.25rem;display:flex;align-items:center;justify-content:center;background:#334155;border:1px solid #475569;border-radius:4px;font-weight:bold;color:#93c5fd;font-size:0.9rem;">${d}</div>`
+                ).join('');
+
+                const row2HTML = displayOrder.map(d =>
+                    `<div style="width:2.25rem;height:2.25rem;display:flex;align-items:center;justify-content:center;background:#1e293b;border:1px solid #475569;border-radius:4px;font-weight:bold;font-size:0.95rem;">${digitMap[d] || '？'}</div>`
+                ).join('');
+
+                container.innerHTML = `
+                    <div style="display:flex;flex-direction:column;gap:1.5rem;">
+                        <!-- クルー行 -->
+                        <div style="display:flex;flex-direction:column;gap:0.75rem;">
+                            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:3px;">
+                                ${numBox(d_to)}${numBox(d_ma)}${numBox(d_to)}
+                                ${arrow}
+                                <span style="font-weight:bold;font-size:1.05rem;letter-spacing:0.05em;">とまと</span>
+                            </div>
+                            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:3px;">
+                                ${numBox(d_o)}${numBox(d_ne)}
+                                ${arrow}
+                                <span style="font-weight:bold;font-size:1.05rem;">１</span>
+                            </div>
+                            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
+                                <span style="color:#cbd5e1;">（</span>
+                                <span style="color:#f1f5f9;font-weight:bold;">あなたのバッテリー残量</span>
+                                ${addProcess}
+                                <span style="color:#cbd5e1;">）</span>
+                                ${arrow}
+                                <span style="width:2.5rem;height:2.5rem;background:#dc2626;display:flex;align-items:center;justify-content:center;color:white;border-radius:6px;font-weight:bold;font-size:1.2rem;">？</span>
+                            </div>
+                        </div>
+
+                        <!-- 数字・ひらがな グリッド (中心揃え) -->
+                        <div style="display:flex;justify-content:center;margin-top:0.5rem;">
+                            <div style="display:flex;flex-direction:column;gap:4px;align-items:center;">
+                                <div style="display:flex;gap:4px;">${row1HTML}</div>
+                                <div style="display:flex;gap:4px;">${row2HTML}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            computeAndRender();
+            battery.addEventListener('levelchange', computeAndRender);
         }
 
         // --- スケルトンパズルレンダリング ---
