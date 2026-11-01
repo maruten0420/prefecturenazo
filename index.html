@@ -200,7 +200,7 @@
             container.innerHTML = `
                 <div class="flex flex-col md:flex-row gap-6 h-full items-start">
                     <div class="flex-1 flex flex-col items-center w-full">
-                        <div class="inline-grid gap-1 bg-slate-900/30 p-2 rounded-lg" style="grid-template-columns: repeat(${cols}, 32px);">
+                        <div class="grid w-full max-w-[400px] gap-1 bg-slate-900/30 p-2 rounded-lg" style="grid-template-columns: repeat(${cols}, minmax(0, 1fr));">
                             ${grid.map(row => row.map(cell => `
                                 <div class="skeleton-cell ${cell ? 'border-blue-500' : 'border-transparent shadow-[0_0_8px_rgba(59,130,246,0.2)]'}">
                                     ${cell?.num ? `<span class="cell-num">${cell.num}</span>` : ''}
