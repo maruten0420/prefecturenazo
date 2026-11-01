@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>テスト - 謎解きシステム</title>
+    <title>謎解きシステム</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap');
@@ -49,13 +49,6 @@
             100% { background-color: #1e293b; }
         }
 
-        /* 緑色の矢印 */
-        .arrow-green {
-            color: #22c55e;
-            font-weight: bold;
-            font-size: 1.5rem;
-        }
-
         /* 赤背景のハテナ */
         .question-box {
             background-color: #dc2626;
@@ -74,20 +67,12 @@
 </head>
 <body>
 
-    <!-- 1. スタート画面 -->
-    <div id="screen-start" class="flex flex-col items-center justify-center h-screen">
-        <h1 class="text-6xl font-bold mb-12 tracking-widest text-blue-400">テスト</h1>
-        <button onclick="startGame()" class="px-12 py-4 bg-blue-600 hover:bg-blue-500 rounded-full text-xl font-bold transition-all transform hover:scale-110 shadow-lg">
-            開始
-        </button>
-    </div>
-
-    <!-- 3. メイン画面 -->
-    <div id="screen-main" class="hidden p-4 max-w-5xl mx-auto flex flex-col justify-center min-h-screen">
+    <!-- メイン画面 (最初から表示) -->
+    <div id="screen-main" class="p-4 max-w-5xl mx-auto flex flex-col justify-center min-h-screen">
         <div id="nazo-container" class="bg-slate-800 rounded-2xl p-6 min-h-[480px] shadow-2xl mb-6 relative border border-slate-700">
             <div id="nazo-title" class="text-blue-400 text-sm font-bold mb-4 uppercase tracking-widest">Mission Control</div>
             <div id="nazo-display" class="flex flex-col h-full">
-                <!-- ここに[1]が自動で描画される -->
+                <!-- ここに謎が自動で描画される -->
             </div>
         </div>
 
@@ -100,22 +85,22 @@
                 <button onclick="checkAnswer()" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold transition-colors">送信</button>
             </div>
             <div id="answer-message" class="text-center mt-2 font-bold h-6"></div>
-        </div>
-
-        <!-- ボタンエリア -->
-        <div class="grid grid-cols-5 gap-4">
-            <button onclick="loadNazo(1)" class="py-4 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold border-b-4 border-blue-900 active:border-0 active:translate-y-1">[1]</button>
-            <button disabled class="py-4 bg-slate-800 text-slate-600 rounded-xl font-bold border-b-4 border-slate-900 opacity-50 cursor-not-allowed text-sm">[2]</button>
-            <button disabled class="py-4 bg-slate-800 text-slate-600 rounded-xl font-bold border-b-4 border-slate-900 opacity-50 cursor-not-allowed text-sm">[3]</button>
-            <button disabled class="py-4 bg-slate-800 text-slate-600 rounded-xl font-bold border-b-4 border-slate-900 opacity-50 cursor-not-allowed text-sm">[4]</button>
-            <button disabled class="py-4 bg-slate-800 text-slate-600 rounded-xl font-bold border-b-4 border-slate-900 opacity-50 cursor-not-allowed text-sm">[5]</button>
+            
+            <!-- X投稿エリア (初期は非表示) -->
+            <div id="share-area" class="hidden flex justify-center mt-6">
+                <a id="share-x-btn" href="#" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 px-8 py-4 bg-black hover:bg-gray-800 text-white rounded-full text-lg font-bold transition-transform transform hover:scale-105 shadow-lg border border-gray-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                    </svg>
+                    Xに投稿する！
+                </a>
+            </div>
         </div>
     </div>
 
     <script>
         let userPref = "UNKNOWN";
         let userTeam = null; 
-        let currentNazo = 0;
 
         // --- 初期設定 ---
         async function fetchLocation() {
@@ -134,40 +119,49 @@
             }
         }
 
-        // スタートからメインへ直行
-        async function startGame() {
-            document.getElementById('screen-start').classList.add('hidden');
-            document.getElementById('screen-main').classList.remove('hidden');
+        // ページロード時に即座に謎を表示
+        window.onload = async function() {
             await fetchLocation();
-            loadNazo(1); // 最初から[1]を表示
-        }
+            loadNazo();
+        };
 
-        function loadNazo(id) {
-            currentNazo = id;
+        function loadNazo() {
             const display = document.getElementById('nazo-display');
-            document.getElementById('nazo-title').innerText = `Mission [${id}]`;
             document.getElementById('user-answer').value = "";
             document.getElementById('answer-message').innerText = "";
-
-            if (id === 1) renderPrefecturePuzzle(display);
+            renderPrefecturePuzzle(display);
         }
 
         function checkAnswer() {
             const val = document.getElementById('user-answer').value.trim().toLowerCase();
             const msg = document.getElementById('answer-message');
             
-            if (currentNazo === 1 && val === "danger") {
+            if (val === "danger") {
                 msg.innerText = "CORRECT!";
                 msg.className = "text-center mt-2 font-bold h-6 text-green-400";
                 document.getElementById('nazo-container').classList.add('success-flash');
                 setTimeout(() => document.getElementById('nazo-container').classList.remove('success-flash'), 500);
+                
+                // 正解時にX投稿ボタンを表示し、リンクをセット
+                showShareButton();
             } else {
                 msg.innerText = "WRONG...";
                 msg.className = "text-center mt-2 font-bold h-6 text-red-400";
             }
         }
 
-        // --- 謎1: スケルトン ---
+        function showShareButton() {
+            const shareArea = document.getElementById('share-area');
+            const shareBtn = document.getElementById('share-x-btn');
+            
+            const shareText = `https://maruten0420.github.io/oneday-nazo-performance/\nあなたは一枚謎に正解した！\n#謎解き`;
+            const shareUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
+            
+            shareBtn.href = shareUrl;
+            shareArea.classList.remove('hidden');
+        }
+
+        // --- 謎: スケルトン ---
         function renderPrefecturePuzzle(container) {
             const rows = 12, cols = 10;
             let grid = Array(rows).fill().map(() => Array(cols).fill(null));
